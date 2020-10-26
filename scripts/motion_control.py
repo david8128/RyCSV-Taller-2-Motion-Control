@@ -23,7 +23,7 @@ class Motion:
 
         #Speed Limits
         self.cruise_lin = 0.0
-        self.cruise_lang = 0.0
+        self.cruise_ang = 0.0
 
         #Goal Position
         self.x_goal = 0.0
@@ -124,32 +124,45 @@ class Motion:
         print("Polares p: "+str(self.p))
         print(" - - - - - - ")
 
-    def compute_control(self):
-        self.k_vector = np.array([[-1*self.k_p*self.p*math.cos(self.alpha),
-                                   (self.k_p*math.sin(self.alpha))-(self.k_a*self.alpha)-(self.beta*self.k_b),
-                                    -1*self.k_p*math.sin(self.alpha)]])
-        self.p_dot = self.k_vector[0,0]
-        self.alpha_dot = self.k_vector[0,1]
-        self.beta_dot = self.k_vector[0,2]
-        print(" - - - - - - ")
-        print(" SALIDA CONTROLADOR (EN POLAR)")
-        print("Vel alpha: "+str(self.alpha_dot))
-        print("Vel beta: "+str(self.beta_dot))
-        print("Vel p: "+str(self.p_dot))
-        print(" - - - - - - ")
+    # def compute_control(self):
+    #     self.k_vector = np.array([[-1*self.k_p*self.p*math.cos(self.alpha),
+    #                                (self.k_p*math.sin(self.alpha))-(self.k_a*self.alpha)-(self.beta*self.k_b),
+    #                                 -1*self.k_p*math.sin(self.alpha)]])
+    #     self.p_dot = self.k_vector[0,0]
+    #     self.alpha_dot = self.k_vector[0,1]
+    #     self.beta_dot = self.k_vector[0,2]
+    #     print(" - - - - - - ")
+    #     print(" SALIDA CONTROLADOR (EN POLAR)")
+    #     print("Vel alpha: "+str(self.alpha_dot))
+    #     print("Vel beta: "+str(self.beta_dot))
+    #     print("Vel p: "+str(self.p_dot))
+    #     print(" - - - - - - ")
 
     def transform_speed(self):
-        ts = np.array([[math.cos(self.alpha),0],
-                      [-1*(math.sin(self.alpha)/self.p),1],
-                      [math.sin(self.alpha)/self.p,0]])
-        polar = np.array([[self.p_dot],[self.alpha_dot],[self.beta_dot]])
-        out = np.matmul(np.linalg.pinv(ts),polar)
+        # ts = np.array([[math.cos(self.alpha),0],
+        #               [-1*(math.sin(self.alpha)/self.p),1],
+        #               [math.sin(self.alpha)/self.p,0]])
+        # polar = np.array([[self.p_dot],[self.alpha_dot],[self.beta_dot]])
+        # out = np.matmul(np.linalg.pinv(ts),polar)
         print(" - - - - - - ")
         print(" SALIDA CONTROLADOR (TRANSFORMADA)")
-        print(out)
+        #print(out)
+        #self.v_out = out[0,0]
+        #self.w_out = out[1,0]
+
+        v = self.p * self.k_p 
+        w = self.k_a * self.alpha + self.k_b * self.beta
+        
+        self.w_out = min(w, np.deg2rad(self.cruise_ang))
+
+        if(self.alpha <= (np.pi/2) or self.alpha > (-np.pi/2)):
+            self.v_out = min(v,self.cruise_lin)     
+        else:
+            self.v_out = max(-1*v,-1*self.cruise_lin) 
+
+        print("V out :"+str(self.v_out))
+        print("W out :"+str(self.w_out))
         print(" - - - - - - ")
-        self.v_out = -1*out[0,0]
-        self.w_out = out[1,0]
 
 if __name__ == '__main__':
 
@@ -161,7 +174,7 @@ if __name__ == '__main__':
 
     controlador = Motion()
     controlador.set_controller_params()
-    controlador.set_goal(5,5,70)
+    controlador.set_goal(5,5,0)
 
     rate = rospy.Rate(20) # 20 Hz
 
@@ -174,7 +187,7 @@ if __name__ == '__main__':
         controlador.broadcast_goal()
         controlador.compute_error()
         controlador.transform_error()
-        controlador.compute_control()
+        #controlador.compute_control()
         controlador.transform_speed()
 
         command.linear.x =  controlador.v_out
