@@ -9,10 +9,10 @@
     <!-- Gazebo Initialization -->
     <include file="$(find kobuki_gazebo)/launch/kobuki_empty_world.launch"/>
 
-    <!-- RQT Steering --> 
+    <!-- RQT Steering 
     <node name="rqt_robot_steering" pkg="rqt_robot_steering" type="rqt_robot_steering">
         <param name="default_topic" value="/mobile_base/commands/velocity"/> 
-    </node>  
+    </node>  --> 
 
     <!-- RVIZ Visualization --> 
     <node name="rviz" pkg="rviz" type="rviz" 
