@@ -11,9 +11,8 @@ import time
 from geometry_msgs.msg import TransformStamped
 from geometry_msgs.msg import Twist
 
-
 class Motion:
-
+    
     def __init__(self):
 
         #Controller Gains
@@ -144,8 +143,6 @@ class Motion:
         #               [math.sin(self.alpha)/self.p,0]])
         # polar = np.array([[self.p_dot],[self.alpha_dot],[self.beta_dot]])
         # out = np.matmul(np.linalg.pinv(ts),polar)
-        print(" - - - - - - ")
-        print(" SALIDA CONTROLADOR (TRANSFORMADA)")
         #print(out)
         #self.v_out = out[0,0]
         #self.w_out = out[1,0]
@@ -153,17 +150,69 @@ class Motion:
         v = self.p * self.k_p 
         w = self.k_a * self.alpha + self.k_b * self.beta
         
-        self.w_out = min(w, np.deg2rad(self.cruise_ang))
+        self.w_out = np.sign(w)*min(abs(w), np.deg2rad(self.cruise_ang))
 
         if(self.alpha <= (np.pi/2) or self.alpha > (-np.pi/2)):
             self.v_out = min(v,self.cruise_lin)     
         else:
             self.v_out = max(-1*v,-1*self.cruise_lin) 
 
+        print(" - - - - - - ")
+        print(" SALIDA CONTROLADOR (TRANSFORMADA)")
         print("V out :"+str(self.v_out))
         print("W out :"+str(self.w_out))
         print(" - - - - - - ")
 
+    def arrived2goal(self):
+        if (abs(self.alpha<0.02) and abs(self.beta)<0.02 and self.p<0.02):
+            return True
+        else:
+            return False
+
+def angle_between(p0,p1,p2):
+    v0 = np.array(p1) - np.array(p0)
+    v1 = np.array(p2) - np.array(p0)
+
+    angle = np.math.atan2(np.linalg.det([v0,v1]),np.dot(v0,v1))
+    return angle
+
+def xy2traj(dots):
+    """
+    From xy coordinates generates a complete trajectory
+
+    Takes x,y coordinates of a trajectory and calculates x,y,theta coordinates
+    with intermidiate points that assure twists of 90
+    
+    Parameters
+    ----------
+    dots : list of [x,y]
+        Dots [[x_0,y_0],[x_1,y_1],...]
+    Motion : control.Motion
+        Class where the control and motion is settled
+
+    Returns
+    -------
+    list of [x,y,theta]
+        Complete trajectory
+
+    """
+    traj = []
+    for count, dot in enumerate(dots):
+        x = dot[0]
+        y = dot[1]
+        if (count == 0) :
+            theta = 0
+            traj.append([x,y,theta])           #Radians
+        else:
+            theta = angle_between(last_dot,[last_x+1,last_y],dot)
+            traj.append([last_x,last_y,theta])
+            traj.append([x,y,theta])
+        last_dot = dot
+        last_theta = theta
+        last_x = x
+        last_y = y
+    return traj
+    
 if __name__ == '__main__':
 
     rospy.init_node('motion_controller', anonymous=True)
@@ -174,8 +223,14 @@ if __name__ == '__main__':
 
     controlador = Motion()
     controlador.set_controller_params()
-    controlador.set_goal(5,5,0)
-
+    dots = [
+            [0, 0], [3.5, 0], [3.5, 3.5], [1.5, 3.5],
+            [1.5, -1.5], [3.5, -1.5], [3.5, -8.0], 
+            [-2.5, -8.0], [-2.5, -5.5], [1.5, -5.5], 
+            [1.5, -3.5], [-1.0, -3.5]
+           ]
+    traj = xy2traj(dots)
+    goal_id = 0
     rate = rospy.Rate(20) # 20 Hz
 
     print("WAITING FOR GAZEBO")
@@ -184,6 +239,9 @@ if __name__ == '__main__':
     command = Twist()
 
     while (not rospy.is_shutdown()):
+        if(goal_id<(np.shape(traj)[0]-1) and controlador.arrived2goal()):
+            goal_id+=1
+        controlador.set_goal(traj[goal_id][0],traj[goal_id][1],traj[goal_id][2])
         controlador.broadcast_goal()
         controlador.compute_error()
         controlador.transform_error()
