@@ -51,7 +51,7 @@ class Motion:
         self.p = 0.0
 
         #Controller Vector
-        self.k_vector = np.array([[-1*self.k_p*math.cos(self.alpha),
+        self.k_vector = np.array([[-1*self.k_p*self.p*math.cos(self.alpha),
                                    (self.k_p*math.sin(self.alpha))-(self.k_a*self.alpha)-(self.beta*self.k_b),
                                     -1*self.k_p*math.sin(self.alpha)]])
 
@@ -108,7 +108,7 @@ class Motion:
             rpy = tf_conversions.transformations.euler_from_quaternion(quat)
             self.error_x = trans.transform.translation.x * -1
             self.error_y = trans.transform.translation.y * -1
-            self.error_th = rpy[2] * -1
+            self.error_th = rpy[2] 
             self.error_pub.publish(trans)
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             print("Exception")
@@ -125,7 +125,7 @@ class Motion:
         print(" - - - - - - ")
 
     def compute_control(self):
-        self.k_vector = np.array([[-1*self.k_p*math.cos(self.alpha),
+        self.k_vector = np.array([[-1*self.k_p*self.p*math.cos(self.alpha),
                                    (self.k_p*math.sin(self.alpha))-(self.k_a*self.alpha)-(self.beta*self.k_b),
                                     -1*self.k_p*math.sin(self.alpha)]])
         self.p_dot = self.k_vector[0,0]
@@ -141,14 +141,14 @@ class Motion:
     def transform_speed(self):
         ts = np.array([[math.cos(self.alpha),0],
                       [-1*(math.sin(self.alpha)/self.p),1],
-                      [math.sin(self.alpha),0]])
+                      [math.sin(self.alpha)/self.p,0]])
         polar = np.array([[self.p_dot],[self.alpha_dot],[self.beta_dot]])
         out = np.matmul(np.linalg.pinv(ts),polar)
         print(" - - - - - - ")
         print(" SALIDA CONTROLADOR (TRANSFORMADA)")
         print(out)
         print(" - - - - - - ")
-        self.v_out = out[0,0]
+        self.v_out = -1*out[0,0]
         self.w_out = out[1,0]
 
 if __name__ == '__main__':
