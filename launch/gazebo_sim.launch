@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<launch>
+
+    <!-- Control Node -->
+    <node name="motion_controller" pkg="rycsv_kobuki_motion_control" type="motion_control.py" output="screen">
+        <rosparam command="load" file="$(find rycsv_kobuki_motion_control)/config/control_params.yaml"/>
+    </node>
+
+    <!-- Gazebo Initialization -->
+    <include file="$(find kobuki_gazebo)/launch/kobuki_empty_world.launch"/>
+
+    <!-- RQT Steering --> 
+    <node name="rqt_robot_steering" pkg="rqt_robot_steering" type="rqt_robot_steering">
+        <param name="default_topic" value="/mobile_base/commands/velocity"/> 
+    </node>  
+
+    <!-- RVIZ Visualization --> 
+    <node name="rviz" pkg="rviz" type="rviz" 
+          args="-d $(find rycsv_kobuki_motion_control)/config/config.rviz"/> 
+
+</launch>

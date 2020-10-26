@@ -1,0 +1,13 @@
+gains:
+  k_p: 1.0
+  k_a: 1.0
+  k_b: -1.0
+
+init_pos:
+  x: 0.0
+  y: 0.0
+  th: 0.0
+
+cruise: 
+  lin: 0.3
+  ang: 60
