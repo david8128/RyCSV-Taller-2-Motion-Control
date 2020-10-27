@@ -93,7 +93,7 @@ class Motion:
     def set_goal(self,x,y,th):
         self.x_goal = x
         self.y_goal = y
-        self.th_goal = np.deg2rad(th)
+        self.th_goal = th
 
     def compute_error(self):
         try:
@@ -164,7 +164,7 @@ class Motion:
         print(" - - - - - - ")
 
     def arrived2goal(self):
-        if (abs(self.alpha<0.02) and abs(self.beta)<0.02 and self.p<0.02):
+        if (abs(self.error_x<0.02) and abs(self.error_y)<0.02 and abs(self.error_th)<0.02):
             return True
         else:
             return False
@@ -201,7 +201,7 @@ def xy2traj(dots):
         x = dot[0]
         y = dot[1]
         if (count == 0) :
-            theta = 0
+            theta = np.pi/2
             traj.append([x,y,theta])           #Radians
         else:
             theta = angle_between(last_dot,[last_x+1,last_y],dot)
@@ -224,7 +224,7 @@ if __name__ == '__main__':
     controlador = Motion()
     controlador.set_controller_params()
     dots = [
-            [0, 0], [3.5, 0], [3.5, 3.5], [1.5, 3.5],
+            [0, 0], [-3.5, 0], [-3.5, 3.5], [1.5, 3.5],
             [1.5, -1.5], [3.5, -1.5], [3.5, -8.0], 
             [-2.5, -8.0], [-2.5, -5.5], [1.5, -5.5], 
             [1.5, -3.5], [-1.0, -3.5]
@@ -234,14 +234,21 @@ if __name__ == '__main__':
     rate = rospy.Rate(20) # 20 Hz
 
     print("WAITING FOR GAZEBO")
-    time.sleep(4)
+    print(traj)
+    time.sleep(10)
 
     command = Twist()
 
+    controlador.set_goal(traj[goal_id][0],traj[goal_id][1],traj[goal_id][2])
+    
     while (not rospy.is_shutdown()):
-        if(goal_id<(np.shape(traj)[0]-1) and controlador.arrived2goal()):
-            goal_id+=1
-        controlador.set_goal(traj[goal_id][0],traj[goal_id][1],traj[goal_id][2])
+
+        print("-------")
+        print("Goal actual")
+        print(traj[goal_id])
+        print("Goal siguiente")
+        print(traj[goal_id+1])
+        print("-------")
         controlador.broadcast_goal()
         controlador.compute_error()
         controlador.transform_error()
@@ -252,5 +259,10 @@ if __name__ == '__main__':
         command.angular.z =  controlador.w_out
 
         kobuki_speed_pub.publish(command)
+
+        if(goal_id<(np.shape(traj)[0]-1) and controlador.arrived2goal()):
+            goal_id+=1      
+        
+        controlador.set_goal(traj[goal_id][0],traj[goal_id][1],traj[goal_id][2])
 
         rate.sleep()

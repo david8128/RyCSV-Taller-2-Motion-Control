@@ -7,8 +7,6 @@ import math
 import numpy as np
 
 
-
-
 class prueba:
 
     def __init__(self):
