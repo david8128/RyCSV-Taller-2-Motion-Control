@@ -10,6 +10,8 @@ import numpy as np
 import time
 from geometry_msgs.msg import TransformStamped
 from geometry_msgs.msg import Twist
+from dynamic_reconfigure.server import Server
+from rycsv_kobuki_motion_control.cfg import controllerConfig
 
 class Motion:
     
@@ -63,39 +65,47 @@ class Motion:
         self.v_out = 0.0
         self.w_out = 0.0
 
-    def set_controller_params(self):
-        self.k_p = rospy.get_param('/motion_controller/gains/k_p')
-        self.k_a = rospy.get_param('/motion_controller/gains/k_a')
-        self.k_b = rospy.get_param('/motion_controller/gains/k_b')
+    def set_controller_params(self,config, level):
+        #Get control parameters from ROS param server
+        #This function is a callback from the dynamic reconfigure server
+        self.k_p = rospy.get_param('/motion_controller/k_p')
+        self.k_a = rospy.get_param('/motion_controller/k_a')
+        self.k_b = rospy.get_param('/motion_controller/k_b')
         self.cruise_lin = rospy.get_param('/motion_controller/cruise/lin')
         self.cruise_ang = rospy.get_param('/motion_controller/cruise/ang')
+        print('p gain: '+str(self.k_p))
+        print('a gain: '+str(self.k_a))
+        print('b gain: '+str(self.k_b))
+        return(config)
         
-        print("Matriz de control")
-        print(self.k_vector)
 
     def broadcast_goal(self):
+        #Broadcast goal position as TF transform
+
         t = TransformStamped()
 
         t.header.stamp = rospy.Time.now()
-        t.header.frame_id = "odom"
-        t.child_frame_id = "goal"
-        t.transform.translation.x = self.x_goal
+        t.header.frame_id = "odom" #Fixed Frame
+        t.child_frame_id = "goal" #Goal frame
+        t.transform.translation.x = self.x_goal 
         t.transform.translation.y = self.y_goal
         t.transform.translation.z = 0.0
+        #Transform from rpy (angles) to quaternion
         q = tf_conversions.transformations.quaternion_from_euler(0, 0, self.th_goal)
         t.transform.rotation.x = q[0]
         t.transform.rotation.y = q[1]
         t.transform.rotation.z = q[2]
         t.transform.rotation.w = q[3]
 
-        self.goal_br.sendTransform(t)
+        self.goal_br.sendTransform(t) #Broadcast
     
     def set_goal(self,x,y,th):
         self.x_goal = x
         self.y_goal = y
-        self.th_goal = th
+        self.th_goal = np.deg2rad(th)
 
     def compute_error(self):
+        #Measure error from base footprint to goal
         try:
             now = rospy.Time(0)
             trans = self.tfBuffer.lookup_transform('goal', 'base_footprint', now, rospy.Duration(1.0))
@@ -104,15 +114,18 @@ class Motion:
             quat[1] = trans.transform.rotation.y 
             quat[2] = trans.transform.rotation.z 
             quat[3] = trans.transform.rotation.w 
+            #Transform from quaternion to rpy
             rpy = tf_conversions.transformations.euler_from_quaternion(quat)
-            self.error_x = trans.transform.translation.x * -1
+            self.error_x = trans.transform.translation.x * -1 #Negative (measured from goal to base, inverted)
             self.error_y = trans.transform.translation.y * -1
-            self.error_th = rpy[2] 
-            self.error_pub.publish(trans)
+            self.error_th = rpy[2]  #Orientation respecting right hand rule
+            self.error_pub.publish(trans) #Publish error in topic for debugging
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             print("Exception")
     
     def transform_error(self):
+        #Transform error from X-Y cartesian cordinates to polar coordinates
+        #Refer to: Roland Siegwart, Intro to autonomus mobile robots - Chap 3 (Control Law)
         self.p = math.sqrt((pow(self.error_x,2) + pow(self.error_y,2)))
         self.alpha = (-1 * self.error_th) + math.atan2(self.error_y,self.error_x)
         self.beta = (-1 * self.error_th) - (self.alpha)
@@ -123,36 +136,18 @@ class Motion:
         print("Polares p: "+str(self.p))
         print(" - - - - - - ")
 
-    # def compute_control(self):
-    #     self.k_vector = np.array([[-1*self.k_p*self.p*math.cos(self.alpha),
-    #                                (self.k_p*math.sin(self.alpha))-(self.k_a*self.alpha)-(self.beta*self.k_b),
-    #                                 -1*self.k_p*math.sin(self.alpha)]])
-    #     self.p_dot = self.k_vector[0,0]
-    #     self.alpha_dot = self.k_vector[0,1]
-    #     self.beta_dot = self.k_vector[0,2]
-    #     print(" - - - - - - ")
-    #     print(" SALIDA CONTROLADOR (EN POLAR)")
-    #     print("Vel alpha: "+str(self.alpha_dot))
-    #     print("Vel beta: "+str(self.beta_dot))
-    #     print("Vel p: "+str(self.p_dot))
-    #     print(" - - - - - - ")
+    def control_speed(self):
 
-    def transform_speed(self):
-        # ts = np.array([[math.cos(self.alpha),0],
-        #               [-1*(math.sin(self.alpha)/self.p),1],
-        #               [math.sin(self.alpha)/self.p,0]])
-        # polar = np.array([[self.p_dot],[self.alpha_dot],[self.beta_dot]])
-        # out = np.matmul(np.linalg.pinv(ts),polar)
-        #print(out)
-        #self.v_out = out[0,0]
-        #self.w_out = out[1,0]
-
-        v = self.p * self.k_p 
-        w = self.k_a * self.alpha + self.k_b * self.beta
+        #Control Law
+        #Refer to: Roland Siegwart, Intro to autonomus mobile robots - Chap 3 (Control Law)
+        v = self.p * self.k_p                               #Linear speed
+        w = self.k_a * self.alpha + self.k_b * self.beta    #Angular speed
         
-        self.w_out = np.sign(w)*min(abs(w), np.deg2rad(self.cruise_ang))
+        #Angular speed limit
+        self.w_out = np.sign(w)*min(abs(w),np.deg2rad(self.cruise_ang))
 
-        if(self.alpha <= (np.pi/2) or self.alpha > (-np.pi/2)):
+        #Lineal speed limit and reverse correction
+        if(self.alpha <= (np.pi/2) or self.alpha >= (-np.pi/2)):
             self.v_out = min(v,self.cruise_lin)     
         else:
             self.v_out = max(-1*v,-1*self.cruise_lin) 
@@ -164,6 +159,7 @@ class Motion:
         print(" - - - - - - ")
 
     def arrived2goal(self):
+        #Check is robot base has arrived to goal
         if (abs(self.error_x<0.02) and abs(self.error_y)<0.02 and abs(self.error_th)<0.02):
             return True
         else:
@@ -201,17 +197,18 @@ def xy2traj(dots):
         x = dot[0]
         y = dot[1]
         if (count == 0) :
-            theta = np.pi/2
-            traj.append([x,y,theta])           #Radians
+            theta = 90
+            traj.append([x,y,theta])           #Radians to deg
         else:
             theta = angle_between(last_dot,[last_x+1,last_y],dot)
-            traj.append([last_x,last_y,theta])
-            traj.append([x,y,theta])
+            traj.append([last_x,last_y,np.rad2deg(theta)])
+            traj.append([x,y,np.rad2deg(theta)])
         last_dot = dot
         last_theta = theta
         last_x = x
         last_y = y
     return traj
+
     
 if __name__ == '__main__':
 
@@ -222,7 +219,6 @@ if __name__ == '__main__':
     kobuki_speed_pub = rospy.Publisher(nameSpeedTopic, Twist, queue_size=10)
 
     controlador = Motion()
-    controlador.set_controller_params()
     dots = [
             [0, 0], [-3.5, 0], [-3.5, 3.5], [1.5, 3.5],
             [1.5, -1.5], [3.5, -1.5], [3.5, -8.0], 
@@ -236,24 +232,20 @@ if __name__ == '__main__':
     print("WAITING FOR GAZEBO")
     print(traj)
     time.sleep(10)
+    rospy.wait_for_service('/gazebo/spawn_urdf_model')
 
     command = Twist()
 
     controlador.set_goal(traj[goal_id][0],traj[goal_id][1],traj[goal_id][2])
+
+    srv = Server(controllerConfig, controlador.set_controller_params)
     
     while (not rospy.is_shutdown()):
 
-        print("-------")
-        print("Goal actual")
-        print(traj[goal_id])
-        print("Goal siguiente")
-        print(traj[goal_id+1])
-        print("-------")
         controlador.broadcast_goal()
         controlador.compute_error()
         controlador.transform_error()
-        #controlador.compute_control()
-        controlador.transform_speed()
+        controlador.control_speed()
 
         command.linear.x =  controlador.v_out
         command.angular.z =  controlador.w_out
