@@ -79,12 +79,12 @@ class Motion:
         return(config)
         
 
-    def broadcast_goal(self):
+    def broadcast_goal(self,now):
         #Broadcast goal position as TF transform
 
         t = TransformStamped()
 
-        t.header.stamp = rospy.Time.now()
+        t.header.stamp = now
         t.header.frame_id = "odom" #Fixed Frame
         t.child_frame_id = "goal" #Goal frame
         t.transform.translation.x = self.x_goal 
@@ -104,10 +104,9 @@ class Motion:
         self.y_goal = y
         self.th_goal = np.deg2rad(th)
 
-    def compute_error(self):
+    def compute_error(self,now):
         #Measure error from base footprint to goal
         try:
-            now = rospy.Time(0)
             trans = self.tfBuffer.lookup_transform('goal', 'base_footprint', now, rospy.Duration(1.0))
             quat = np.zeros(4)
             quat[0] = trans.transform.rotation.x 
@@ -160,7 +159,7 @@ class Motion:
 
     def arrived2goal(self):
         #Check is robot base has arrived to goal
-        if (abs(self.error_x<0.02) and abs(self.error_y)<0.02 and abs(self.error_th)<0.02):
+        if (abs(self.error_x)<0.02 and abs(self.error_y)<0.02 and abs(self.error_th)<0.02):
             return True
         else:
             return False
@@ -230,20 +229,32 @@ if __name__ == '__main__':
     rate = rospy.Rate(20) # 20 Hz
 
     print("WAITING FOR GAZEBO")
-    print(traj)
-    time.sleep(10)
     rospy.wait_for_service('/gazebo/spawn_urdf_model')
+
+    time.sleep(2)
 
     command = Twist()
 
-    controlador.set_goal(traj[goal_id][0],traj[goal_id][1],traj[goal_id][2])
+    #controlador.set_goal(traj[goal_id][0],traj[goal_id][1],traj[goal_id][2])
+
+    controlador.set_goal(0,0,0)
+    flag = 0
+    square = np.array([[0,0,0],
+                       [2,0,0],
+                       [2,0,90],
+                       [2,2,90],
+                       [2,2,180],
+                       [0,2,180],
+                       [0,2,270],
+                       [0,0,270]])
+ 
 
     srv = Server(controllerConfig, controlador.set_controller_params)
     
     while (not rospy.is_shutdown()):
-
-        controlador.broadcast_goal()
-        controlador.compute_error()
+        now = rospy.Time.now()
+        controlador.broadcast_goal(now)
+        controlador.compute_error(now)
         controlador.transform_error()
         controlador.control_speed()
 
@@ -252,9 +263,12 @@ if __name__ == '__main__':
 
         kobuki_speed_pub.publish(command)
 
-        if(goal_id<(np.shape(traj)[0]-1) and controlador.arrived2goal()):
-            goal_id+=1      
-        
-        controlador.set_goal(traj[goal_id][0],traj[goal_id][1],traj[goal_id][2])
+        if controlador.arrived2goal():
+            flag = flag+1
+
+            if flag == 8:
+                flag = 0
+
+            controlador.set_goal(square[flag,0],square[flag,1],square[flag,2])
 
         rate.sleep()
