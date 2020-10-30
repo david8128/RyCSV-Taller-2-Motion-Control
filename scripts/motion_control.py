@@ -211,64 +211,80 @@ def xy2traj(dots):
     
 if __name__ == '__main__':
 
+    #Trajectory node init
     rospy.init_node('motion_controller', anonymous=True)
     rospy.loginfo("Motion controller node init")
 
+    #Wheel speed publisher
     nameSpeedTopic = "/mobile_base/commands/velocity"
     kobuki_speed_pub = rospy.Publisher(nameSpeedTopic, Twist, queue_size=10)
+    command = Twist()
 
+    #Controller object
     controlador = Motion()
+
+    #Trajectory dots (No orientation)
     dots = [
             [0, 0], [-3.5, 0], [-3.5, 3.5], [1.5, 3.5],
             [1.5, -1.5], [3.5, -1.5], [3.5, -8.0], 
             [-2.5, -8.0], [-2.5, -5.5], [1.5, -5.5], 
             [1.5, -3.5], [-1.0, -3.5]
            ]
+
+    #Add orientation to trajectory
     traj = xy2traj(dots)
+    traj = np.array(traj)
+    #Trajectory limits
     goal_id = 0
-    rate = rospy.Rate(20) # 20 Hz
+    dot_count, coord = traj.shape
+
+    rate = rospy.Rate(20) # 20 Hz ROS
 
     print("WAITING FOR GAZEBO")
-    rospy.wait_for_service('/gazebo/spawn_urdf_model')
-
+    rospy.wait_for_service('/gazebo/spawn_urdf_model') #Wait for model spawn
     time.sleep(2)
+    
+    #Initial point
+    controlador.set_goal(traj[goal_id][0],traj[goal_id][1],traj[goal_id][2])
 
-    command = Twist()
+    #Square trajectory for testing
+    #controlador.set_goal(0,0,0)
+    #flag = 0
+    #square = np.array([[0,0,0],
+    #                   [2,0,0],
+    #                   [2,0,90],
+    #                   [2,2,90],
+    #                   [2,2,180],
+    #                   [0,2,180],
+    #                   [0,2,270],
+    #                   [0,0,270]])
 
-    #controlador.set_goal(traj[goal_id][0],traj[goal_id][1],traj[goal_id][2])
-
-    controlador.set_goal(0,0,0)
-    flag = 0
-    square = np.array([[0,0,0],
-                       [2,0,0],
-                       [2,0,90],
-                       [2,2,90],
-                       [2,2,180],
-                       [0,2,180],
-                       [0,2,270],
-                       [0,0,270]])
- 
-
+    #Server to get param from dynamic reconfig
     srv = Server(controllerConfig, controlador.set_controller_params)
     
+
     while (not rospy.is_shutdown()):
+
+        #Get "now" time to syncronize target tf and error tf 
         now = rospy.Time.now()
-        controlador.broadcast_goal(now)
+        controlador.broadcast_goal(now) 
         controlador.compute_error(now)
         controlador.transform_error()
-        controlador.control_speed()
+        controlador.control_speed() #Compute wheel speed (out)
 
         command.linear.x =  controlador.v_out
         command.angular.z =  controlador.w_out
 
         kobuki_speed_pub.publish(command)
 
-        if controlador.arrived2goal():
-            flag = flag+1
+        if controlador.arrived2goal():  
+            goal_id = goal_id+1      #Change point when arrived to goal
 
-            if flag == 8:
-                flag = 0
+            if goal_id == dot_count:
+                goal_id = 0         #Go back to initial point
 
-            controlador.set_goal(square[flag,0],square[flag,1],square[flag,2])
+            #Square testing
+            #controlador.set_goal(square[flag,0],square[flag,1],square[flag,2])
+            controlador.set_goal(traj[goal_id][0],traj[goal_id][1],traj[goal_id][2])
 
         rate.sleep()
