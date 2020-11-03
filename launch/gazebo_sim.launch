@@ -1,5 +1,10 @@
 <?xml version="1.0"?>
 <launch>
+    <!-- Robot pose -->
+    <arg name="x" default="0"/>
+    <arg name="y" default="0"/>
+    <arg name="z" default="-1.5"/>
+    <arg name="yaw" default="-1.57"/>
 
     <!-- Control Node -->
     <node name="motion_controller" pkg="rycsv_kobuki_motion_control" type="motion_control.py" output="screen">
@@ -7,7 +12,28 @@
     </node>
 
     <!-- Gazebo Initialization -->
-    <include file="$(find kobuki_gazebo)/launch/kobuki_empty_world.launch"/>
+    <include file="$(find gazebo_ros)/launch/empty_world.launch">
+        <arg name="use_sim_time" value="true"/>
+        <arg name="debug" value="false"/>
+        <arg name="world_name" value="$(find kobuki_gazebo)/worlds/empty.world"/>
+    </include>
+
+    <!-- Spawns Kobuki inside a Gazebo simulation -->
+    <arg name="robot_name" value="mobile_base"/>
+    <param name="robot_description"
+        command="$(find xacro)/xacro '$(find kobuki_description)/urdf/kobuki_standalone.urdf.xacro'"/>
+    <node pkg="gazebo_ros" 
+          type="spawn_model" 
+          name="spawn_$(arg robot_name)"
+          args="-x $(arg x) -y $(arg y) -z $(arg z) -Y $(arg yaw)
+          -unpause -urdf -param robot_description -model $(arg robot_name)" 
+          respawn="false">
+    </node>
+
+    <node pkg="robot_state_publisher" type="robot_state_publisher" name="robot_state_publisher">
+        <param name="publish_frequency" type="double" value="30.0"/>
+    </node>
+    <node pkg="nodelet" type="nodelet" name="$(arg robot_name)_nodelet_manager" args="manager"/>
 
     <!-- RVIZ Visualization --> 
     <node name="rviz" pkg="rviz" type="rviz" 
