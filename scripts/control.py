@@ -117,6 +117,15 @@ class Motion:
             self.error_y = trans.transform.translation.y * -1
             self.error_th = rpy[2]  #Orientation respecting right hand rule
             self.error_pub.publish(trans) #Publish error in topic for debugging
+
+            #Print error for debugging
+            print("--")
+            print("Error X-Y-Th")
+            print("Error x:"+str(self.error_x))
+            print("Error y:"+str(self.error_y))
+            print("Error th:"+str(self.error_th))
+            print("--")
+
         except (tf2_ros.LookupException, tf2_ros.ConnectivityException, tf2_ros.ExtrapolationException):
             print("Exception")
     
@@ -126,12 +135,14 @@ class Motion:
         self.p = math.sqrt((pow(self.error_x,2) + pow(self.error_y,2)))
         self.alpha = (-1 * self.error_th) + math.atan2(self.error_y,self.error_x)
         self.beta = (-1 * self.error_th) - (self.alpha)
-        print(" - - - - - - ")
-        print(" CONVERSION A POLARES")
-        print("Polares alpha: "+str(self.alpha))
-        print("Polares beta: "+str(self.beta))
-        print("Polares p: "+str(self.p))
-        print(" - - - - - - ")
+
+        #Print polar error for debugging
+        print("--")
+        print("ERROR POLAR")
+        print("alpha: "+str(self.alpha))
+        print("beta: "+str(self.beta))
+        print("p: "+str(self.p))
+        print("--")
 
     def control_speed(self):
 
@@ -149,11 +160,12 @@ class Motion:
         else:
             self.v_out = max(-1*v,-1*self.cruise_lin) 
 
-        print(" - - - - - - ")
-        print(" SALIDA CONTROLADOR (TRANSFORMADA)")
+        #Print controller out for debugging
+        print("--")
+        print(" SALIDA CONTROLADOR")
         print("V out :"+str(self.v_out))
         print("W out :"+str(self.w_out))
-        print(" - - - - - - ")
+        print("--")
 
     def arrived2goal(self):
         #Check is robot base has arrived to goal

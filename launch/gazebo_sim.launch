@@ -4,7 +4,7 @@
     <arg name="x" default="0"/>
     <arg name="y" default="0"/>
     <arg name="z" default="-1.5"/>
-    <arg name="yaw" default="-1.57"/>
+    <arg name="yaw" default="0"/>
 
     <!-- Control Node -->
     <node name="motion_controller" pkg="rycsv_kobuki_motion_control" type="motion_control.py" output="screen">
@@ -15,7 +15,7 @@
     <include file="$(find gazebo_ros)/launch/empty_world.launch">
         <arg name="use_sim_time" value="true"/>
         <arg name="debug" value="false"/>
-        <arg name="world_name" value="$(find kobuki_gazebo)/worlds/empty.world"/>
+        <arg name="world_name" value="$(find rycsv_kobuki_motion_control)/worlds/taller2.world"/>
     </include>
 
     <!-- Spawns Kobuki inside a Gazebo simulation -->

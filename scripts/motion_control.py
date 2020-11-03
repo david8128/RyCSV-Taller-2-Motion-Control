@@ -99,6 +99,12 @@ if __name__ == '__main__':
     
     #Initial point
     controlador.set_goal(traj[goal_id][0],traj[goal_id][1],traj[goal_id][2])
+    print("--")
+    print("GOAL")
+    print("X: "+str(controlador.x_goal))
+    print("Y: "+str(controlador.y_goal))
+    print("Z: "+str(controlador.th_goal))
+    print("--")
 
     #Square trajectory for testing
     #controlador.set_goal(0,0,0)
@@ -114,7 +120,11 @@ if __name__ == '__main__':
 
     #Server to get param from dynamic reconfig
     srv = Server(controllerConfig, controlador.set_controller_params)
+
+    print('Trayectoria a seguir')
+    print(traj)
     
+    time.sleep(10)
 
     while (not rospy.is_shutdown()):
 
@@ -134,10 +144,16 @@ if __name__ == '__main__':
             goal_id = goal_id+1      #Change point when arrived to goal
 
             if goal_id == dot_count:
-                goal_id = 0         #Go back to initial point
+                goal_id = goal_id-1         #Go back to initial point
 
             #Square testing
             #controlador.set_goal(square[flag,0],square[flag,1],square[flag,2])
             controlador.set_goal(traj[goal_id][0],traj[goal_id][1],traj[goal_id][2])
 
+        print("--")
+        print("GOAL")
+        print("X: "+str(controlador.x_goal))
+        print("Y: "+str(controlador.y_goal))
+        print("TH: "+str(controlador.th_goal))
+        print("--")
         rate.sleep()
