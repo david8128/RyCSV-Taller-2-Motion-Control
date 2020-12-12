@@ -115,7 +115,7 @@ class Motion:
             rpy = tf_conversions.transformations.euler_from_quaternion(quat)
             self.error_x = trans.transform.translation.x * -1 #Negative (measured from goal to base, inverted)
             self.error_y = trans.transform.translation.y * -1
-            self.error_th = rpy[2]  #Orientation respecting right hand rule
+            self.error_th = rpy[2] #Orientation respecting right hand rule
             self.error_pub.publish(trans) #Publish error in topic for debugging
 
             #Print error for debugging
@@ -152,13 +152,14 @@ class Motion:
         w = self.k_a * self.alpha + self.k_b * self.beta    #Angular speed
         
         #Angular speed limit
-        self.w_out = np.sign(w)*min(abs(w),np.deg2rad(self.cruise_ang))
+        self.w_out = np.sign(w)*min(abs(w),abs(np.deg2rad(self.cruise_ang)))
+        self.v_out = min(v,self.cruise_lin)
 
         #Lineal speed limit and reverse correction
-        if(self.alpha <= (np.pi/2) or self.alpha >= (-np.pi/2)):
-            self.v_out = min(v,self.cruise_lin)     
-        else:
-            self.v_out = max(-1*v,-1*self.cruise_lin) 
+        #if(self.alpha <= (np.pi/2) or self.alpha >= (-np.pi/2)):
+        #    self.v_out = min(v,self.cruise_lin)     
+        #else:
+        #    self.v_out = max(-1*v,-1*self.cruise_lin) 
 
         #Print controller out for debugging
         print("--")
@@ -168,7 +169,7 @@ class Motion:
         print("--")
 
     def arrived2goal(self):
-        #Check is robot base has arrived to goal
+        #Check is robot base has arrived to goal (Baseline 0.02, all three errors)
         if (abs(self.error_x)<0.02 and abs(self.error_y)<0.02 and abs(self.error_th)<0.02):
             return True
         else:

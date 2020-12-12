@@ -87,11 +87,23 @@ if __name__ == '__main__':
     #Add orientation to trajectory
     traj = xy2traj(dots)
     traj = np.array(traj)
+
+    #Square trajectory for testing
+    #traj = np.array([[0,0,0],
+    #                   [2,0,0],
+    #                   [2,0,90],
+    #                   [2,2,90],
+    #                   [2,2,180],
+    #                   [0,2,180],
+    #                   [0,2,270],
+    #                   [0,0,270]])
+
+
     #Trajectory limits
     goal_id = 0
     dot_count, coord = traj.shape
 
-    rate = rospy.Rate(20) # 20 Hz ROS
+    rate = rospy.Rate(50) # 50 Hz ROS
 
     print("WAITING FOR GAZEBO")
     rospy.wait_for_service('/gazebo/spawn_urdf_model') #Wait for model spawn
@@ -106,25 +118,13 @@ if __name__ == '__main__':
     print("Z: "+str(controlador.th_goal))
     print("--")
 
-    #Square trajectory for testing
-    #controlador.set_goal(0,0,0)
-    #flag = 0
-    #square = np.array([[0,0,0],
-    #                   [2,0,0],
-    #                   [2,0,90],
-    #                   [2,2,90],
-    #                   [2,2,180],
-    #                   [0,2,180],
-    #                   [0,2,270],
-    #                   [0,0,270]])
-
     #Server to get param from dynamic reconfig
     srv = Server(controllerConfig, controlador.set_controller_params)
 
     print('Trayectoria a seguir')
     print(traj)
     
-    time.sleep(10)
+    time.sleep(2)
 
     while (not rospy.is_shutdown()):
 
@@ -144,11 +144,13 @@ if __name__ == '__main__':
             goal_id = goal_id+1      #Change point when arrived to goal
 
             if goal_id == dot_count:
-                goal_id = goal_id-1         #Go back to initial point
+                goal_id = goal_id-1         #Wait at last point
+                #goal_id = 0                 #Go back to initial point
 
-            #Square testing
-            #controlador.set_goal(square[flag,0],square[flag,1],square[flag,2])
             controlador.set_goal(traj[goal_id][0],traj[goal_id][1],traj[goal_id][2])
+            now = rospy.Time.now()
+            controlador.broadcast_goal(now) 
+            controlador.compute_error(now)
 
         print("--")
         print("GOAL")
